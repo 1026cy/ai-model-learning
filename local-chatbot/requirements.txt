@@ -1,0 +1,42 @@
+# ============================================
+# 本地对话模型训练 - 依赖清单
+# 适用于: GTX 1660 Super 6GB + CUDA 11.8
+# ============================================
+
+# --- 核心框架 ---
+torch>=2.1.0,<2.4.0
+# CUDA 11.8 专用版本（安装时请根据实际CUDA版本选择）
+# pip install torch==2.3.0+cu118 --index-url https://download.pytorch.org/whl/cu118
+
+# --- Hugging Face 生态 ---
+transformers>=4.40.0,<4.45.0
+datasets>=2.18.0,<3.0.0
+accelerate>=0.29.0,<1.0.0
+evaluate>=0.4.1
+tokenizers>=0.19.0
+huggingface-hub>=0.22.0
+safetensors>=0.4.0
+
+# --- 参数高效微调 (PEFT) ---
+peft>=0.11.0,<0.13.0
+# LoRA / QLoRA 需要
+bitsandbytes>=0.41.0
+# 注意: bitsandbytes 在 Windows 上需特殊处理，见 README
+
+# --- 训练工具 ---
+trl>=0.8.0,<0.12.0          # Transformer Reinforcement Learning (SFTTrainer)
+wandb>=0.16.0               # 可选: 训练可视化 (pip install wandb)
+
+# --- 数据处理 ---
+jsonlines>=4.0.0
+pandas>=2.0.0
+
+# --- 工具库 ---
+tqdm>=4.66.0
+pyyaml>=6.0
+numpy>=1.24.0,<2.0.0
+sentencepiece>=0.2.0        # 部分分词器需要
+
+# --- 推理优化 (可选) ---
+# vllm>=0.4.0               # 高性能推理，但显存需求较大
+# llama-cpp-python           # GGUF 格式推理，适合边缘设备

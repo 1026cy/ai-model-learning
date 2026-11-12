@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 训练输出
+outputs/
+models/
+*.checkpoint
+
+# 数据 (原始大数据)
+data/raw/alpaca_cleaned.json
+data/processed/
+
+# 缓存
+.cache/
+.huggingface/
+wandb/
+
+# 环境
+.env
+.conda/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 大文件
+*.bin
+*.safetensors
+*.pt
+*.pth
+/data/raw/

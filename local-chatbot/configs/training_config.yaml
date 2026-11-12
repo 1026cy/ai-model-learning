@@ -1,0 +1,101 @@
+# ============================================
+# 训练配置文件 - 适配 GTX 1660 Super 6GB
+# ============================================
+
+# --- 基础模型选择 ---
+# 6GB显存推荐模型（参数量从小到大）:
+# 1. distilgpt2           (82M)   - 英文，轻量快速
+# 2. TinyLlama/TinyLlama-1.1B-Chat-v1.0  (1.1B) - 英文，推荐！
+# 3. facebook/opt-125m    (125M)  - 英文
+# 4. liam168/Chinese-Alpaca-Plus-13B-LoRA 基础模型需自行选择
+# 中文推荐: yahma/alpaca-cleaned 数据集 + 小模型
+model:
+  base_model_name: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"  # 1.1B参数，适合6GB显存
+  # 备选: "distilgpt2" 或 "facebook/opt-125m"
+  trust_remote_code: true
+  use_fast_tokenizer: true
+
+# --- 数据配置 ---
+data:
+  dataset_name: "alpaca"           # 或 "custom" 使用自定义数据
+  # 支持的数据集: "alpaca", "guanaco", "sharegpt", "custom"
+  custom_data_path: "data/raw/chat_data.json"  # 自定义数据路径（JSON格式）
+  max_seq_length: 512              # 最大序列长度 (显存敏感)
+  train_test_split: 0.1            # 验证集比例
+  num_samples: null                # null=全部，或指定数量用于快速测试
+  
+  # 对话模板 (Alpaca格式)
+  prompt_template: |
+    ### Instruction:
+    {instruction}
+    
+    ### Input:
+    {input}
+    
+    ### Response:
+    {response}
+
+# --- LoRA / QLoRA 微调配置 ---
+# QLoRA (4bit量化 + LoRA) 可在6GB显存训练1B+参数模型
+lora:
+  enabled: true                    # 启用LoRA
+  use_qlora: true                  # 启用QLoRA (4bit量化)
+  quantization:
+    load_in_4bit: true
+    bnb_4bit_quant_type: "nf4"     # nf4 (NormalFloat4) 或 fp4
+    bnb_4bit_compute_dtype: "float16"
+    bnb_4bit_use_double_quant: true
+  r: 8                             # LoRA秩 (4, 8, 16, 32)
+  lora_alpha: 16                   # LoRA alpha
+  lora_dropout: 0.05
+  target_modules: ["q_proj", "v_proj"]  # 目标模块
+  # 可选: ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+
+# --- 训练参数 ---
+training:
+  output_dir: "outputs/checkpoints"
+  per_device_train_batch_size: 2   # 6GB显存用1-2
+  per_device_eval_batch_size: 2
+  gradient_accumulation_steps: 8   # 累积梯度 (模拟batch_size=16)
+  learning_rate: 2.0e-4
+  lr_scheduler_type: "cosine"
+  warmup_ratio: 0.03
+  weight_decay: 0.01
+  num_train_epochs: 3.0
+  max_steps: -1                    # -1=用epochs，否则指定步数
+  logging_steps: 10
+  save_steps: 100
+  eval_steps: 100
+  save_total_limit: 2              # 最多保存几个检查点
+  
+  # 混合精度
+  fp16: true                       # GTX 16系列支持fp16
+  
+  # 梯度裁剪
+  max_grad_norm: 0.3
+  
+  # 训练器类型
+  trainer_type: "sft"              # "sft" (Supervised Fine-Tuning) 或 "default"
+
+# --- 资源配置 ---
+resources:
+  # GPU显存优化
+  gradient_checkpointing: true     # 梯度检查点 (节省显存)
+  memory_efficient: true
+  
+  # 数据加载
+  dataloader_num_workers: 4
+  preprocessing_num_workers: 4
+  
+  # torch.compile (可选，加速训练)
+  torch_compile: false
+
+# --- 日志与保存 ---
+logging:
+  report_to: "none"                # "wandb", "tensorboard", "none"
+  run_name: "local-chatbot-v1"
+  
+save:
+  save_strategy: "steps"
+  save_format: "adapter"           # "adapter"(仅LoRA权重) 或 "full"(合并后)
+  merge_lora_before_save: true     # 保存时合并LoRA权重到基础模型
