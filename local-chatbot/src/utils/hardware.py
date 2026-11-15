@@ -96,36 +96,22 @@ def cleanup_gpu_memory():
 
 def get_optimal_training_config(vram_gb, base_config):
     """
-    根据显存自动调整训练参数
+    根据显存给出保守的默认值，但**不覆盖**用户在配置文件里显式写下的关键项
+    (batch_size / gradient_accumulation_steps / use_qlora)。
+    只做“缺省填充”，避免把用户调好的参数改回去。
     """
     config = base_config.copy()
-    
-    # 根据显存调整 batch_size
-    if vram_gb <= 4:
-        config["training"]["per_device_train_batch_size"] = 1
-        config["training"]["gradient_accumulation_steps"] = 16
-        config["training"]["fp16"] = True
-        config["resources"]["gradient_checkpointing"] = True
-        config["lora"]["use_qlora"] = True
-        config["lora"]["quantization"]["load_in_4bit"] = True
-    elif vram_gb <= 6:
-        config["training"]["per_device_train_batch_size"] = 2
-        config["training"]["gradient_accumulation_steps"] = 8
-        config["training"]["fp16"] = True
-        config["resources"]["gradient_checkpointing"] = True
-        config["lora"]["use_qlora"] = True
-        config["lora"]["quantization"]["load_in_4bit"] = True
-    elif vram_gb <= 8:
-        config["training"]["per_device_train_batch_size"] = 4
-        config["training"]["gradient_accumulation_steps"] = 4
-        config["training"]["fp16"] = True
-        config["resources"]["gradient_checkpointing"] = True
-    elif vram_gb <= 12:
-        config["training"]["per_device_train_batch_size"] = 8
-        config["training"]["gradient_accumulation_steps"] = 2
-        config["training"]["fp16"] = True
-    else:
-        config["training"]["per_device_train_batch_size"] = 16
-        config["training"]["gradient_accumulation_steps"] = 1
-    
+    train = config.setdefault("training", {})
+
+    # 仅当用户没有显式设置时才填充默认值
+    if train.get("per_device_train_batch_size") is None:
+        train["per_device_train_batch_size"] = 1 if vram_gb <= 4 else (2 if vram_gb <= 6 else 4)
+    if train.get("gradient_accumulation_steps") is None:
+        train["gradient_accumulation_steps"] = 16 if vram_gb <= 4 else (8 if vram_gb <= 6 else 4)
+
+    if train.get("fp16") is None:
+        train["fp16"] = vram_gb > 0
+    if config.get("resources", {}).get("gradient_checkpointing") is None:
+        config.setdefault("resources", {})["gradient_checkpointing"] = vram_gb <= 8
+
     return config

@@ -46,9 +46,9 @@ def format_alpaca_example(example: Dict[str, Any]) -> str:
     
     输出: prompt + response
     """
-    instruction = example.get("instruction", "")
-    input_text = example.get("input", "")
-    response = example.get("output", "")
+    instruction = example.get("instruction_zh") or example.get("instruction", "")
+    input_text = example.get("input_zh") or example.get("input", "")
+    response = example.get("output_zh") or example.get("output", "")
     
     prompt = ALPACA_PROMPT.format(
         instruction=instruction,
@@ -185,18 +185,17 @@ def tokenize_dataset(
         # 将每条样本格式化为文本
         texts = [format_func(ex) for ex in _dict_to_list_of_dicts(examples)]
         
-        # 分词
+        # 分词 (不做固定长度 padding，交给 collator 按 batch 动态填充)
         tokenized = tokenizer(
             texts,
             truncation=True,
             max_length=max_seq_length,
-            padding="max_length",
+            padding=False,
             return_tensors=None,
         )
         
-        # 设置 labels (复制 input_ids，训练时会自动处理 shift)
-        tokenized["labels"] = tokenized["input_ids"].copy()
-        
+        # 不再手动构造 labels：labels 由 DataCollatorForLanguageModeling
+        # 在 batch 内动态 padding 后生成，避免长度不一致导致 collate 失败
         return tokenized
     
     tokenized_dataset = dataset.map(

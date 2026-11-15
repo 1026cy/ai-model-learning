@@ -20,9 +20,9 @@ data:
   dataset_name: "alpaca"           # 或 "custom" 使用自定义数据
   # 支持的数据集: "alpaca", "guanaco", "sharegpt", "custom"
   custom_data_path: "data/raw/chat_data.json"  # 自定义数据路径（JSON格式）
-  max_seq_length: 512              # 最大序列长度 (显存敏感)
-  train_test_split: 0.1            # 验证集比例
-  num_samples: null                # null=全部，或指定数量用于快速测试
+  max_seq_length: 256              # 最大序列长度 (显存/速度敏感，256 够用)
+  train_test_split: 0.02           # 验证集比例 (只留少量做评估)
+  num_samples: 3000                # null=全部；先用 3000 条快速跑通
   
   # 对话模板 (Alpaca格式)
   prompt_template: |
@@ -39,7 +39,10 @@ data:
 # QLoRA (4bit量化 + LoRA) 可在6GB显存训练1B+参数模型
 lora:
   enabled: true                    # 启用LoRA
-  use_qlora: true                  # 启用QLoRA (4bit量化)
+  # GTX 1660 Super(6GB)：1.1B 模型 fp16 只占 ~2.2GB，用普通 LoRA 更快。
+  # bitsandbytes 4bit 在 Windows + Turing(sm_75) 上解量化很慢，是主要瓶颈，
+  # 因此默认关闭 QLoRA；显存不够时再改回 true。
+  use_qlora: false
   quantization:
     load_in_4bit: true
     bnb_4bit_quant_type: "nf4"     # nf4 (NormalFloat4) 或 fp4
@@ -54,19 +57,20 @@ lora:
 # --- 训练参数 ---
 training:
   output_dir: "outputs/checkpoints"
-  per_device_train_batch_size: 2   # 6GB显存用1-2
+  per_device_train_batch_size: 2   # 6GB 卡留余量，防止 WDDM 显存溢出导致极慢
   per_device_eval_batch_size: 2
-  gradient_accumulation_steps: 8   # 累积梯度 (模拟batch_size=16)
+  gradient_accumulation_steps: 8   # 累积梯度 (有效 batch=16)
   learning_rate: 2.0e-4
   lr_scheduler_type: "cosine"
   warmup_ratio: 0.03
   weight_decay: 0.01
-  num_train_epochs: 3.0
+  num_train_epochs: 1.0
   max_steps: -1                    # -1=用epochs，否则指定步数
-  logging_steps: 10
-  save_steps: 100
-  eval_steps: 100
-  save_total_limit: 2              # 最多保存几个检查点
+  logging_steps: 5
+  save_steps: 200
+  eval_steps: 0                    # 0=关闭验证 (评估很耗时，先关掉)
+  save_total_limit: 1              # 最多保存几个检查点
+  optim: "adamw_torch"             # 比 paged_adamw 快
   
   # 混合精度
   fp16: true                       # GTX 16系列支持fp16
@@ -83,9 +87,9 @@ resources:
   gradient_checkpointing: true     # 梯度检查点 (节省显存)
   memory_efficient: true
   
-  # 数据加载
-  dataloader_num_workers: 4
-  preprocessing_num_workers: 4
+  # 数据加载 (Windows 下 spawn 开销大，2 个即可)
+  dataloader_num_workers: 2
+  preprocessing_num_workers: 2
   
   # torch.compile (可选，加速训练)
   torch_compile: false

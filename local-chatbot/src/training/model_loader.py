@@ -13,7 +13,7 @@ from transformers import (
 
 from peft import (
     LoraConfig,
-    QLoraConfig,
+    # QLoraConfig,
     get_peft_model,
     get_peft_model_state_dict,
     prepare_model_for_kbit_training,
@@ -69,7 +69,8 @@ def load_base_model_and_tokenizer(config: Dict[str, Any]):
         logger.info(f"设置 pad_token = eos_token: {tokenizer.pad_token}")
     
     # ==================== 加载模型 ====================
-    torch_dtype = torch.float16 if config["training"].get("fp16") else torch.float32
+    use_fp16 = config["training"].get("fp16", False) and torch.cuda.is_available()
+    torch_dtype = torch.float16 if use_fp16 else torch.float32
     
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
@@ -127,6 +128,10 @@ def apply_lora(model, config: Dict[str, Any]):
     
     # 应用 LoRA
     model = get_peft_model(model, peft_config)
+
+    # 梯度检查点 + 冻结的 base 模型：需要让 input 参与梯度计算，否则 LoRA 梯度为 None
+    if config["resources"].get("gradient_checkpointing"):
+        model.enable_input_require_grads()
     
     # 打印可训练参数
     model.print_trainable_parameters()
@@ -134,13 +139,14 @@ def apply_lora(model, config: Dict[str, Any]):
     return model
 
 
-def merge_lora_weights(model, output_path: str):
+def merge_lora_weights(model, output_path: str, tokenizer=None):
     """
-    合并 LoRA adapter 权重到基础模型并保存
+    合并 LoRA adapter 权重到基础模型并保存完整推理目录
     
     Args:
         model: 带 LoRA 的模型
         output_path: 保存路径
+        tokenizer: 与模型配套的 tokenizer
     """
     from peft import PeftModel
     
@@ -154,6 +160,10 @@ def merge_lora_weights(model, output_path: str):
         if hasattr(model, "base_model"):
             logger.info("模型已被 prepare_model_for_kbit_training 处理，尝试合并...")
         model.save_pretrained(output_path)
+
+    if tokenizer is not None:
+        tokenizer.save_pretrained(output_path)
+        logger.info(f"Tokenizer 已保存: {output_path}")
 
 
 def load_peft_model(
